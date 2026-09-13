@@ -2167,11 +2167,13 @@ bool llvm::canConstantFoldCallTo(const CallBase *Call, const Function *F) {
   case 's':
     return Name == "sin" || Name == "sinf" ||
            Name == "sinh" || Name == "sinhf" ||
-           Name == "sqrt" || Name == "sqrtf";
+           Name == "sqrt" || Name == "sqrtf" || Name == "strlen";
   case 't':
     return Name == "tan" || Name == "tanf" ||
            Name == "tanh" || Name == "tanhf" ||
            Name == "trunc" || Name == "truncf";
+  case 'w':
+    return Name == "wcslen";
   case '_':
     // Check for various function names that get used for the math functions
     // when the header files are preprocessed with the macro
@@ -2597,6 +2599,23 @@ static Constant *ConstantFoldScalarCall1(StringRef Name,
       }
       return nullptr;
     }
+  }
+
+  if (Name == "strlen") {
+    if (uint64_t Len = GetStringLength(Operands[0]))
+      return ConstantInt::get(Ty, Len - 1);
+    return nullptr;
+  }
+
+  if (Name == "wcslen") {
+    if (!TLI || !Call || !Call->getModule())
+      return nullptr;
+    unsigned WCharSize = TLI->getWCharSize(*Call->getModule()) * 8;
+    if (WCharSize == 0)
+      return nullptr;
+    if (uint64_t Len = GetStringLength(Operands[0], WCharSize))
+      return ConstantInt::get(Ty, Len - 1);
+    return nullptr;
   }
 
   if (auto *Op = dyn_cast<ConstantFP>(Operands[0])) {
